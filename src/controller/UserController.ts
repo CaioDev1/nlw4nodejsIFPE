@@ -1,10 +1,23 @@
 import { Request, Response } from 'express'
 import { getCustomRepository } from 'typeorm'
 import UsersRepository from '../database/repositories/UsersRepository'
+import * as yup from 'yup'
+import AppErrors from '../errors/AppErrors'
 
 class UserController {
     async create(req: Request, res: Response) {
         const {name, email} = req.body
+
+        const schema = yup.object().shape({
+            name: yup.string().required(),
+            email: yup.string().email().required()
+        })
+
+        try {
+            await schema.validate(req.body, {abortEarly: false})
+        } catch(err) {
+            throw new AppErrors(err)
+        }
         
         const usersRepository = getCustomRepository(UsersRepository)
 

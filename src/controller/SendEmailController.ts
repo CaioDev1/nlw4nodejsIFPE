@@ -5,6 +5,7 @@ import SurveysUsersRepository from '../database/repositories/SurveysUsersReposit
 import UsersRepository from '../database/repositories/UsersRepository'
 import SendEmailService from '../services/SendEmailService'
 import {resolve} from 'path'
+import AppErrors from '../errors/AppErrors'
 
 class SendEmailController {
     async execute(req: Request, res: Response) {
@@ -17,34 +18,34 @@ class SendEmailController {
         const user = await usersRepository.findOne({email})
 
         if(!user) {
-            res.status(400).json({
-                error: 'User does not exist.'
-            })
+            throw new AppErrors('User does not exist.')
         }
 
         const survey = await surveysRepository.findOne({id: survey_id})
 
         if(!survey) {
-            res.status(400).json({
-                error: 'Survey does not exist.'
-            })
+            throw new AppErrors('Survey does not exist.')
         }
 
         const npsPath = resolve(__dirname, '..', 'views', 'emails', 'npsEmail.hbs')
+
+        const surveyUserAlreadyExists = await surveysUsersRepository.findOne({
+            where: {user_id: user.id, value: null},
+            relations: ['user', 'survey']
+        })
+
         const variables = {
             name: user.name,
             title: survey.title,
             description: survey.description,
-            user_id: user.id,
+            id: '',
             link: process.env.URL_MAIL
         }
 
-        const surveyUserAlreadyExists = await surveysUsersRepository.findOne({
-            where: [{user_id: user.id}, {value: null}],
-            relations: ['user', 'survey']
-        })
 
         if(surveyUserAlreadyExists) {
+            variables.id = surveyUserAlreadyExists.id
+
             await SendEmailService.execute(email, survey.title, variables, npsPath)
             
             return res.json(surveyUserAlreadyExists)
@@ -57,6 +58,8 @@ class SendEmailController {
 
         await surveysUsersRepository.save(surveyUser)
 
+        variables.id = surveyUser.id
+        
         await SendEmailService.execute(email, survey.title, variables, npsPath)
 
         res.json(surveyUser)
